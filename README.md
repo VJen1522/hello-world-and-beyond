@@ -1,68 +1,113 @@
-# Hello World and Beyond 🐍
+# HIPAA Compliance Knowledge Assistant for HR
 
-Python coursework from my M.S. in Business Analytics (Data Science & AI minor) at the
-University of Dallas, from my first programs to an end-to-end AI text analytics pipeline.
+**An AI assistant that answers HR's HIPAA questions from federal regulations, then checks its own answers for errors.**
 
----
-
-## ⭐ Featured: Voice-Assistant Customer Insights Pipeline
-**File:** `HW_TextCustomerInsights_JenkinsVeronica.ipynb` · BANA 6370: Programming with AI
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/VJen1522/hello-world-and-beyond/blob/main/HW_TextCustomerInsights_JenkinsVeronica.ipynb)
-
-**Business question:** What are subscribers actually trying to do when they talk to a
-voice assistant, and what should leadership do about it?
-
-**What I built:** An end-to-end pipeline that turns 10,000 real voice commands
-(Amazon MASSIVE dataset, Hugging Face) into leadership-ready insights:
-
-1. **Cleaned the data:** removed low-information commands using a length threshold
-   based on the 5th percentile
-2. **Embedded the text:** converted each command into a 384-dimension vector with
-   Sentence Transformers so similar requests group together even when worded differently
-3. **Reduced and clustered:** UMAP (384 → 5 dimensions) and HDBSCAN found
-   **45 behavior clusters** without a preset number, flagging 17.6% as outliers
-4. **Labeled the topics:** BERTopic with a KeyBERT-inspired model produced
-   readable topic keywords
-5. **Wrote insights with an AI model:** used Microsoft Phi-3 to generate executive
-   summaries, comparing basic, structured, and temperature-varied prompts
-6. **Reduced AI errors:** tested few-shot examples and two-step chain prompting, then
-   used a second prompt to check that every claim was supported by the data
-
-**Key findings:** Music and playback, lighting and device control, and weather were
-the three largest themes. Structured prompts with a defined role and format produced
-the most specific, leadership-ready output, and chain prompting reduced made-up content.
-
-**Tools:** Python · pandas · NumPy · Sentence Transformers · UMAP · HDBSCAN ·
-BERTopic · Hugging Face Transformers · Phi-3 · matplotlib · Google Colab
+Built with semantic search and retrieval-augmented generation (RAG) using open-source IBM Granite models.
 
 ---
 
-## 🎲 Blackjack Game
-**File:** `Unit_6_Blackjack_VSCopilot.py` · Programming I
+## The Business Problem
 
-A text-based Blackjack game against the computer, built in VS Code with GitHub Copilot.
-It handles card values (including Aces as 1 or 11), turn-by-turn play, input
-validation, and replaying.
+In healthcare organizations, HR owns much of the workforce side of HIPAA: privacy training for new hires and current staff, sanction policies for employees who violate privacy rules, and the steady stream of compliance questions from managers. The answers are spread across thousands of pages of federal regulations and guidance. HR generalists rarely have time to search them, and a wrong answer can lead to inconsistent discipline, audit findings, or legal exposure.
 
-## 🔐 Caesar Cipher
-**File:** `Unit_5_Caesar_Cipher.py` · Programming I
-
-An interactive tool that encodes and decodes messages with a shifted-letter
-cipher, using Python dictionaries and loops.
+**Goal:** Give HR and Compliance staff fast, sourced answers to questions like:
+- *What HIPAA training must our workforce receive?*
+- *What sanctions are required when an employee violates privacy policy?*
+- *What must we do when a breach of patient information is discovered?*
 
 ---
 
-## ▶️ How to Run
-- **Notebook:** click the **Open in Colab** badge above. A GPU runtime is recommended
-  for the Phi-3 section.
-- **Python scripts:** from the project folder, run:
-```bash
-  python Unit_6_Blackjack_VSCopilot.py
-  python Unit_5_Caesar_Cipher.py
+## How It Works
+
+```mermaid
+flowchart LR
+    A[HR question] --> B[Semantic search<br/>Granite Embedding R2 + FAISS]
+    B --> C[Reranker<br/>Granite Reranker R2]
+    C --> D[Top 5 regulation passages]
+    D --> E[Answer drafted<br/>Granite 4.1 3B]
+    E --> F[Automated quote &<br/>citation check]
+    F --> G[Human review by<br/>Compliance Officer]
 ```
 
-## 👩‍💻 About Me
-Payroll and HR operations professional (nearly 17 years at Southwest Airlines) building
-data science and AI skills for a career in payroll and HR analytics.
-[View my profile](https://github.com/VJen1522)
+1. **Search by meaning, not keywords.** 1,211 passages from 8 federal HIPAA sources are converted into embeddings, so a question about "disciplining employees" finds passages about "sanctions against workforce members."
+2. **Rerank for relevance.** A second model re-reads the top 20 results and puts the best matches first, the way a recruiter reviews the candidates an applicant tracking system screens in.
+3. **Answer only from the sources.** The language model is instructed to answer using only the retrieved passages and to cite them.
+4. **Verify automatically.** A rule-based check confirms whether each quote appears word-for-word in the sources and whether each CFR citation can be found there.
+
+---
+
+## Key Results
+
+### Search accuracy (56 test questions)
+
+| Setup | Correct passage ranked #1 | Correct passage in top 5 | MRR |
+|---|---|---|---|
+| MiniLM (course baseline) | 0.0% | 1.8% | 0.004 |
+| IBM Granite Embedding R2 | 5.4% | 17.9% | 0.100 |
+| **Granite R2 + reranker** | **28.6%** | **32.1%** | **0.301** |
+
+Reranking roughly **tripled ranking quality** over the upgraded embedding model alone. Scores are a strict lower bound: only the exact source passage counts as correct, although many questions have several valid answers.
+
+### What the evaluation revealed
+
+- **The model produced executive-ready answers** in a structured Summary / Requirements / Recommended Actions format.
+- **It also made confident, convincing errors.** It invented examples of discipline that the regulations do not list, cited the wrong CFR section, and classified technical safeguards as administrative ones.
+- **A better prompt improved usability, not accuracy.** The structured "HR Director" prompt produced more useful answers but *more* unsupported content.
+- **Requiring citations reduced the severity of errors.** The invented content disappeared, but a wrong citation and a paraphrased "quote" remained.
+- **The automated check caught both remaining errors** with no human input: 2 of 3 quotes were verbatim, and 3 of 4 citations were found in the sources.
+
+---
+
+## Recommendation for HR Leadership
+
+Pilot the assistant as a **research aid, not a source of final answers**:
+1. Run the automated quote and citation check on every answer.
+2. Route flagged answers, and a sample of passing ones, to the Privacy or Compliance Officer.
+3. Confirm every CFR citation against the official eCFR text before an answer is used in policy, training, or discipline decisions.
+4. Expand the library with the official regulation text, HHS guidance, state privacy laws, and the organization's own policies.
+
+---
+
+## Tools and Data
+
+| | |
+|---|---|
+| **Language** | Python (Google Colab, T4 GPU) |
+| **Embedding model** | `ibm-granite/granite-embedding-english-r2` |
+| **Reranker** | `ibm-granite/granite-embedding-reranker-english-r2` |
+| **Language model** | `ibm-granite/granite-4.1-3b` (instruct) |
+| **Vector search** | FAISS |
+| **Libraries** | sentence-transformers, transformers, pandas, NumPy |
+| **Data** | [HIPAA Compliance Training Dataset](https://huggingface.co/datasets/ethanolivertroy/hipaa-compliance-training) (Troy, 2025), built from the HIPAA Privacy, Security, and Breach Notification Rules, the HITECH Omnibus Rule, NIST SP 800-66 Rev. 2, and FDA guidance. CC0 public domain. |
+
+**Why these models:** The Granite embedding model reads passages up to 8,192 tokens (the baseline stops at about 256) and was trained only on commercially licensed data. The Granite 4.1 language model is Apache 2.0 licensed, designed for enterprise use, and small enough to run on a free cloud GPU.
+
+---
+
+## Repository Contents
+
+| File | Description |
+|---|---|
+| `HW_SemanticSearch_Generation_JenkinsVeronica.ipynb` | Full notebook: code, outputs, and business interpretation for every step |
+| `HW_SemanticSearch_Generation_JenkinsVeronica.pdf` | Read-only version of the notebook |
+
+**To run it:** Open the notebook in Google Colab, select a T4 GPU runtime, and choose Runtime → Run all. The first run downloads the models (about 7 GB) and takes several minutes.
+
+---
+
+## Limitations
+
+- The questions in the dataset were machine-generated from official publications, and the core regulation text (45 CFR Parts 160, 162, 164) failed to extract and was removed.
+- The library is weighted toward the Privacy Rule (about 44% of passages) and contains no state law or organization-specific policy.
+- Results come from one dataset and 56 test questions. They show which setup works best for this library, not everywhere.
+- This is a learning prototype. **Its outputs are not legal advice.**
+
+---
+
+## About This Project
+
+Built by **Veronica Jenkins** for BANA 6370: Programming with AI at the University of Dallas (Fall 2026), as part of an MS in Business Analytics and AI. The notebook adapts instructor-provided example code to a new dataset and business problem. Claude (Anthropic) assisted with adapting code, researching models, debugging, and drafting explanatory text; all code was run and all results were reviewed by the author.
+
+I bring an HR background to people analytics and AI, with a focus on tools that help HR teams work faster **without** giving up accuracy, compliance, or accountability.
+
+📫 [LinkedIn](https://www.linkedin.com/in/YOUR-PROFILE)
